@@ -21,13 +21,23 @@ function Bullet(_player, pos2) {
             }
             if (p.id != _player.id) {
                 if (this.pos.x > p.pos.x - p.r / 2 && this.pos.x < p.pos.x + p.r / 2) {
-                    if (this.pos.y > p.pos.y - p.r / 2 && this.pos.y < p.pos.y + p.r) {
+                    if (this.pos.y > p.pos.y - p.r / 2 && this.pos.y < p.pos.y + p.r / 2) {
                         //console.log("Col : " + p.id + " && " + _player.id);
                         this.killItself();
-                        p.hurt();
+                        p.hurt(_player);
+                        return;
                     }
                 }
             }
+        }
+        for (var i = 0; i < objects.length; i++) {
+          var wall = objects[i];
+          if (this.pos.x > wall.pos.x - wall.width / 2 && this.pos.x < wall.pos.x + wall.width / 2) {
+              if (this.pos.y > wall.pos.y - wall.height / 2 && this.pos.y < wall.pos.y + wall.height / 2) {
+                  this.killItself();
+                  return;
+              }
+          }
         }
     }
     this.killItself = function () {

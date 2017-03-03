@@ -1,6 +1,6 @@
 function Player(x, y, isPlayer, id) {
     if (id == null) {
-        this.id = "Loading...";    
+        this.id = "Loading...";
     } else {
         this.id = id;
     }
@@ -11,11 +11,14 @@ function Player(x, y, isPlayer, id) {
     this.r = 20;
     this.bullets = [];
     this.lifes = 3;
-    
+    this.fireRate = 500;
+    this.lastFire = Date.now();
+    this.deathes = 0;
+
     this.up = false, this.down = false, this.left = false, this.right = false;
-    
-    this.draw = function () {
-        this.bullets.forEach(function (bullet) {
+
+    this.draw = function() {
+        this.bullets.forEach(function(bullet) {
             bullet.draw();
         });
         if (isPlayer) {
@@ -29,12 +32,12 @@ function Player(x, y, isPlayer, id) {
         noStroke();
         rect(this.pos.x - 15, this.pos.y - 20, this.lifes * 10, 5);
         fill(255);
-        /*textSize(10);
-        text(this.id, this.pos.x, this.pos.y - 10);*/
-        
+        textSize(10);
+        text(this.deathes, this.pos.x - 3 * this.deathes.toString().length, this.pos.y + 20);
+
     }
-    
-    this.update = function () {
+
+    this.update = function() {
         if (this.up && this.vel.y > -this.speed) {
             this.vel.y -= this.acceleration;
         }
@@ -47,13 +50,17 @@ function Player(x, y, isPlayer, id) {
         if (this.right && this.vel.x < this.speed) {
             this.vel.x += this.acceleration;
         }
-        
+
         this.vel.x += -this.vel.x / this.decceleration;
         this.vel.y += -this.vel.y / this.decceleration;
-        
-        this.pos.x += this.vel.x;
-        this.pos.y += this.vel.y;
-        
+
+        if (!this.doesCollideX(this.vel.x)) {
+            this.pos.x += this.vel.x;
+        }
+        if (!this.doesCollideY(this.vel.y)) {
+            this.pos.y += this.vel.y;
+        }
+
         if (this.pos.x <= this.r / 2) {
             this.pos.x = this.r / 2;
         }
@@ -66,39 +73,77 @@ function Player(x, y, isPlayer, id) {
         if (this.pos.x >= width - this.r / 2) {
             this.pos.x = width - this.r / 2;
         }
-        
+
         for (var i = 0; i < this.bullets.length; i++) {
             this.bullets[i].update();
         }
-        
-        if (this.lifes < 0) {
-            //DIE STUFF HERE
-            this.lifes = 3;
-        }
-        
+
         if (this.lastPos.x != this.pos.x || this.lastPos.y != this.pos.y) {
             this.lastPos = createVector(this.pos.x, this.pos.y);
             if (isPlayer) {
                 socket.emit('pos', {
-                x: this.pos.x
-                , y: this.pos.y
-                , id: this.id
-            });
+                    x: this.pos.x,
+                    y: this.pos.y,
+                    id: this.id
+                });
             }
         }
+
     }
-    
-    this.hurt = function () {
-        console.log("Hurted");
+
+    this.hurt = function(p) {
+      if (isPlayer) {
         this.lifes--;
+        if (this.lifes < 0) {
+            this.deathes++;
+            this.lifes = 3;
+        }
+        socket.emit('update', {id: this.id, lifes: this.lifes, deathes: this.deathes});
+        this.vel.x += (this.pos.x - p.pos.x) / 50;
+        this.vel.y += (this.pos.y - p.pos.y) / 50;
+      }
     }
-    
-    this.fire = function (target) {
-        this.bullets.push(new Bullet(this, target));
-        socket.emit('fire', {targetX: target.x, targetY: target.y, id: this.id});
+
+    this.fire = function(target) {
+        if (Date.now() - this.lastFire >= this.fireRate) {
+            this.lastFire = Date.now();
+            this.vel.x += (this.pos.x - target.x) / 50;
+            this.vel.y += (this.pos.y - target.y) / 50;
+            this.bullets.push(new Bullet(this, target));
+            socket.emit('fire', {
+                targetX: target.x,
+                targetY: target.y,
+                id: this.id
+            });
+        }
     }
-    
-    this.onKeyPressed = function (keyCode) {
+
+    this.doesCollideY = function(y) {
+        //console.log("ColY");
+        for (var i = 0; i < objects.length; i++) {
+            var wall = objects[i];
+            if (this.pos.x + this.r / 2 >= wall.pos.x - wall.width / 2 && this.pos.x - this.r / 2 <= wall.pos.x + wall.width / 2) {
+                if (this.pos.y + this.r / 2 + y >= wall.pos.y - wall.height / 2 && this.pos.y - this.r / 2 + y <= wall.pos.y + wall.height / 2) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    this.doesCollideX = function(x) {
+        for (var i = 0; i < objects.length; i++) {
+            var wall = objects[i];
+            if (this.pos.x + this.r / 2 + x >= wall.pos.x - wall.width / 2 && this.pos.x - this.r / 2 + x <= wall.pos.x + wall.width / 2) {
+                if (this.pos.y + this.r / 2 >= wall.pos.y - wall.height / 2 && this.pos.y - this.r / 2 <= wall.pos.y + wall.height / 2) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    this.onKeyPressed = function(keyCode) {
         //console.log(keyCode);
         switch (keyCode) {
             case 38:
@@ -115,8 +160,8 @@ function Player(x, y, isPlayer, id) {
                 break;
         }
     }
-    
-    this.onKeyReleased = function (keyCode) {
+
+    this.onKeyReleased = function(keyCode) {
         switch (keyCode) {
             case 38:
                 this.up = false;
@@ -132,9 +177,9 @@ function Player(x, y, isPlayer, id) {
                 break;
         }
     }
-    
-    this.onMouseClicked = function (mouseX, mouseY) {
+
+    this.onMouseClicked = function(mouseX, mouseY) {
         this.fire(createVector(mouseX, mouseY));
     }
-    
+
 }
